@@ -1,0 +1,6 @@
+streamlit
+requests
+beautifulsoup4
+pymupdf
+spacy
+# 're' is part of the Python standard library and does not need to be installed separately.
