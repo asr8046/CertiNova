@@ -5,7 +5,8 @@ import re
 from utils.pdf_parser import extract_and_clean_pdf_text
 from utils.url_handler import validate_and_scrape_cert_url, extract_links_from_text
 from utils.skill_extractor import match_skills
- 
+from utils.pdf_parser import extract_name_from_certificate_text, extract_name_from_text
+
 st.title("CertiNova – Resume & Certification Verifier")
  
 uploaded_resume = st.file_uploader("Upload Resume (optional)", type=["pdf"])
@@ -181,14 +182,17 @@ for url in all_urls:
         valid, content = validate_and_scrape_cert_url(clean_url)
         if valid:
             # Try to extract name from the content (if it's a PDF, not HTML/text)
-            from utils.pdf_parser import extract_name_from_certificate_text, extract_name_from_text
             cert_name = extract_name_from_certificate_text(content)
             # Treat generic badge/certification titles as missing name
             KNOWN_BADGE_TITLES = [
-                'AWS Certified Solutions', 'AWS Certified', 'Microsoft Certified', 'Google Certified', 'Oracle Certified', 'Udemy Certificate', 'Coursera Certificate', 'edX Certificate', 'Certified', 'Credential', 'Badge', 'Certification', 'Certificate'
+                'AWS Certified Solutions', 'AWS Certified', 'Microsoft Certified', 'Google Certified', 'Oracle Certified',
+                'Udemy Certificate', 'Coursera Certificate', 'edX Certificate', 'Certified', 'Credential', 'Badge', 'Certification', 'Certificate'
             ]
-            if not cert_name or cert_name.strip() in KNOWN_BADGE_TITLES or not any(char.isalpha() for char in cert_name):
-                cert_name = st.text_input(f"Could not extract name from this certificate ({clean_url}). Please enter the name as it appears on the certificate:", key=clean_url)
+            if (not cert_name or cert_name.strip() in KNOWN_BADGE_TITLES or not any(char.isalpha() for char in cert_name)):
+                cert_name = st.text_input(
+                    f"Could not extract name from this certificate ({clean_url}). Please enter the name as it appears on the certificate:",
+                    key=clean_url
+                )
                 if not cert_name:
                     st.warning(f"No name provided for certificate ({clean_url}). Skill verification skipped for this certificate.")
                     continue
