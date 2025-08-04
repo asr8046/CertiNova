@@ -6,7 +6,7 @@ from utils.pdf_parser import extract_and_clean_pdf_text
 from utils.url_handler import validate_and_scrape_cert_url, extract_links_from_text
 from utils.skill_extractor import match_skills
  
-st.title("SkillCert – Resume & Certification Verifier")
+st.title("CertiNova – Resume & Certification Verifier")
  
 uploaded_resume = st.file_uploader("Upload Resume (optional)", type=["pdf"])
 

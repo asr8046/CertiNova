@@ -5,6 +5,12 @@ CertiNova is a Streamlit-based web app for verifying and extracting skills from 
 ---
 
 ## Features
+
+- Extracts and matches candidate name from both resume and certificate (PDF or link).
+- Prompts for manual name entry if name cannot be extracted from a certificate link (e.g., Credly badge).
+- Skill verification only proceeds if the names match.
+- Supports PDF uploads, Google Drive links, and badge/certificate links (with fallback).
+
 - Upload resume (PDF) and extract skills using NLP
 - Upload certificate PDFs and/or provide certificate URLs
 - Compare and verify skills between resume and certifications
