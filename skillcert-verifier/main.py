@@ -1,9 +1,9 @@
 # app.py
  
 import streamlit as st
-
+import re
 from utils.pdf_parser import extract_and_clean_pdf_text
-from utils.url_handler import validate_and_scrape_cert_url
+from utils.url_handler import validate_and_scrape_cert_url, extract_links_from_text
 from utils.skill_extractor import match_skills
  
 st.title("SkillCert – Resume & Certification Verifier")
@@ -18,6 +18,12 @@ uploaded_certs = st.file_uploader("Upload Certificate PDFs", type=["pdf"], accep
 
 resume_skills = []
 
+COMMON_SKILLS = [
+    "python", "pyspark", "pl/sql", "java", "scala", "data analysis", "big data", "spark", "hadoop", "mapreduce",
+    "pipelines", "hive", "impala", "oracle", "kudu", "windows", "linux", "git", "gradle", "openshift", "jenkins",
+    "azure", "cloud", "sql", "machine learning", "automation"
+]
+
 if uploaded_resume:
 
     resume_text = extract_and_clean_pdf_text(uploaded_resume)
@@ -25,12 +31,13 @@ if uploaded_resume:
     st.subheader("Extracted Resume Text (Debug)")
     st.write(resume_text)
 
+    # Extract URLs from resume text
+    resume_urls = extract_links_from_text(resume_text)
+    if resume_urls:
+        st.subheader("Extracted URLs from Resume")
+        st.write(resume_urls)
+
     # Basic keyword-based skill extraction
-    COMMON_SKILLS = [
-        "python", "pyspark", "pl/sql", "java", "scala", "data analysis", "big data", "spark", "hadoop", "mapreduce",
-        "pipelines", "hive", "impala", "oracle", "kudu", "windows", "linux", "git", "gradle", "openshift", "jenkins",
-        "azure", "cloud", "sql", "machine learning", "automation"
-    ]
     resume_skills = [skill for skill in COMMON_SKILLS if skill.lower() in resume_text.lower()]
     st.subheader("Extracted Resume Skills")
     st.write(resume_skills)
@@ -45,12 +52,114 @@ if uploaded_certs:
         cert_text = extract_and_clean_pdf_text(cert_file)
         cert_skills.extend([skill for skill in COMMON_SKILLS if skill.lower() in cert_text.lower()])
 
-for url in cert_links.strip().splitlines():
-    valid, content = validate_and_scrape_cert_url(url)
+# Extract URLs from certificate links textarea, clean and deduplicate
+cert_link_urls = extract_links_from_text(cert_links)
+if cert_link_urls:
+    st.subheader("Extracted Certificate URLs")
+    st.write(cert_link_urls)
+
+all_urls = set(cert_link_urls)
+if uploaded_resume:
+    all_urls.update(resume_urls)
+
+# Mapping of skills to synonyms/related phrases for dynamic runtime extraction
+SKILL_SYNONYMS = {
+    "python": ["python"],
+    "pyspark": ["pyspark"],
+    "pl/sql": ["pl/sql", "pl sql", "procedural language/sql"],
+    "java": ["java"],
+    "scala": ["scala"],
+    "data analysis": ["data analysis", "analyzing data", "data analytics", "data analyst"],
+    "big data": ["big data", "large-scale data", "bigdata"],
+    "spark": ["spark", "apache spark"],
+    "hadoop": ["hadoop", "apache hadoop"],
+    "mapreduce": ["mapreduce", "map reduce"],
+    "pipelines": ["pipeline", "pipelines", "data pipeline", "etl pipeline"],
+    "hive": ["hive", "apache hive"],
+    "impala": ["impala", "apache impala"],
+    "oracle": ["oracle", "oracle database"],
+    "kudu": ["kudu", "apache kudu"],
+    "windows": ["windows"],
+    "linux": ["linux"],
+    "git": ["git", "github", "gitlab"],
+    "gradle": ["gradle"],
+    "openshift": ["openshift", "red hat openshift"],
+    "jenkins": ["jenkins", "jenkins pipeline"],
+    "azure": ["azure", "microsoft azure", "azure cloud"],
+    "cloud": ["cloud", "cloud computing", "cloud architect", "cloud platform", "aws", "azure", "gcp", "google cloud", "cloud engineer"],
+    "sql": ["sql", "structured query language"],
+    "machine learning": ["machine learning", "ml", "deep learning", "ai", "artificial intelligence"],
+    "automation": ["automation", "automated", "automating"],
+}
+
+import tempfile
+import requests
+
+def try_fetch_pdf_and_extract_skills(pdf_url):
+    try:
+        st.info(f"Attempting to download and parse PDF certificate from: {pdf_url}")
+        import certifi
+        def safe_get(url, **kwargs):
+            if "drive.google.com" in url:
+                return requests.get(url, verify=False, **kwargs)
+            else:
+                return requests.get(url, verify=certifi.where(), **kwargs)
+        response = safe_get(pdf_url, stream=True, timeout=10)
+        if response.status_code == 200:
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
+                tmp_file.write(response.content)
+                tmp_file.flush()
+                cert_text = extract_and_clean_pdf_text(tmp_file.name)
+            content_lower = cert_text.lower()
+            matched_skills = set()
+            for skill, synonyms in SKILL_SYNONYMS.items():
+                for phrase in synonyms:
+                    if phrase in content_lower:
+                        matched_skills.add(skill)
+                        break
+            cert_skills.extend(matched_skills)
+            st.info(f"Dynamically extracted skills from PDF {pdf_url}: {matched_skills}")
+            st.success(f"Fetched and processed certificate PDF: {pdf_url}")
+        else:
+            st.warning(f"Could not download PDF from {pdf_url}: HTTP {response.status_code}")
+    except Exception as e:
+        st.warning(f"Failed to process PDF from {pdf_url}: {e}")
+
+for url in all_urls:
+    clean_url = url.strip()
+    if not clean_url:
+        continue
+    # Handle Google Drive links
+    if "drive.google.com" in clean_url:
+        import re
+        file_id_match = re.search(r"/d/([\w-]+)", clean_url)
+        if file_id_match:
+            file_id = file_id_match.group(1)
+            direct_pdf_url = f"https://drive.google.com/uc?export=download&id={file_id}"
+            try_fetch_pdf_and_extract_skills(direct_pdf_url)
+            continue
+        else:
+            st.warning(f"Google Drive link format not recognized: {clean_url}. Please upload the PDF directly.")
+            continue
+    # Handle direct PDF links
+    if clean_url.lower().endswith(".pdf"):
+        try_fetch_pdf_and_extract_skills(clean_url)
+        continue
+    # Web page
+    valid, content = validate_and_scrape_cert_url(clean_url)
     if valid:
-        cert_skills.extend([skill for skill in COMMON_SKILLS if skill.lower() in content.lower()])
+        content_lower = content.lower()
+        matched_skills = set()
+        for skill, synonyms in SKILL_SYNONYMS.items():
+            for phrase in synonyms:
+                if phrase in content_lower:
+                    matched_skills.add(skill)
+                    break
+        cert_skills.extend(matched_skills)
+        st.info(f"Dynamically extracted skills from {clean_url}: {matched_skills}")
+        st.success(f"Fetched and processed content from: {clean_url}")
     else:
-        st.warning(f"Could not access {url}: {content}")
+        st.warning(f"Could not access {clean_url}: {content}")
 
 # Show result
 

@@ -21,6 +21,7 @@ CertiNova is a Streamlit-based web app for verifying and extracting skills from 
 python -m venv .venv
 .venv\Scripts\activate
 ```
+# .\.venv\Scripts\Activate   # For Windows
 
 ### 3. Install all dependencies
 ```sh
