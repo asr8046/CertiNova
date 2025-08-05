@@ -7,13 +7,47 @@ from utils.url_handler import validate_and_scrape_cert_url, extract_links_from_t
 from utils.skill_extractor import match_skills
 from utils.pdf_parser import extract_name_from_certificate_text, extract_name_from_text
 
-st.title("CertiNova – Resume & Certification Verifier")
- 
-uploaded_resume = st.file_uploader("Upload Resume (optional)", type=["pdf"])
+st.set_page_config(page_title="CertiNova – Skill Verifier", page_icon="📑", layout="wide")
 
-cert_links = st.text_area("Paste Certificate Links (one per line)")
+st.markdown("""
+<style>
+    /* Animated gradient background for the whole app */
+    body {
+        background: linear-gradient(-45deg, #f9f9f9, #e0e7ff, #c1f0f6, #f9e0ff);
+        background-size: 400% 400%;
+        animation: gradientBG 15s ease infinite;
+    }
+    @keyframes gradientBG {
+        0% {background-position: 0% 50%;}
+        50% {background-position: 100% 50%;}
+        100% {background-position: 0% 50%;}
+    }
+    .main {
+        background: transparent !important;
+    }
+    .block-container {padding-top: 2rem;}
+    footer {visibility: hidden;}
+</style>
+""", unsafe_allow_html=True)
 
-uploaded_certs = st.file_uploader("Upload Certificate PDFs", type=["pdf"], accept_multiple_files=True)
+with st.sidebar:
+    st.image("https://img.icons8.com/fluency/96/000000/certificate.png", width=80)
+    st.title("CertiNova")
+    st.markdown("**Skill Verifier**")
+    st.markdown(":information_source: Upload your resume and certificates or paste certificate links for instant skill verification.")
+    uploaded_resume = st.file_uploader("Upload Resume (optional)", type=["pdf"])
+    uploaded_certs = st.file_uploader("Upload Certificate PDFs", type=["pdf"], accept_multiple_files=True)
+    cert_links = st.text_area("Paste Certificate Links (one per line)")
+    st.markdown("---")
+    st.caption("Made with :heart: by CertiNova Team")
+
+st.title("📑 CertiNova – Skill Verifier")
+st.markdown(
+    """
+    <span style='color:#4F8BF9;font-size:18px;'>Easily verify claimed skills by matching your resume with uploaded certificates and online credentials.</span>
+    """,
+    unsafe_allow_html=True,
+)
  
 # Process resume
 
@@ -27,21 +61,21 @@ COMMON_SKILLS = [
 
 if uploaded_resume:
     from utils.pdf_parser import extract_name_from_text
-    resume_text = extract_and_clean_pdf_text(uploaded_resume)
-
-    # Extract candidate name from resume
-    resume_name = extract_name_from_text(resume_text)
-
-    # Extract URLs from resume text
-    resume_urls = extract_links_from_text(resume_text)
-    if resume_urls:
-        st.subheader("Extracted URLs from Resume")
-        st.write(resume_urls)
-
-    # Basic keyword-based skill extraction
-    resume_skills = [skill for skill in COMMON_SKILLS if skill.lower() in resume_text.lower()]
-    st.subheader("Extracted Resume Skills")
-    st.write(resume_skills)
+    with st.spinner("Extracting information from resume..."):
+        resume_text = extract_and_clean_pdf_text(uploaded_resume)
+        resume_name = extract_name_from_text(resume_text)
+        resume_urls = extract_links_from_text(resume_text)
+        resume_skills = [skill for skill in COMMON_SKILLS if skill.lower() in resume_text.lower()]
+    with st.expander("🔗 URLs Extracted from Resume", expanded=False):
+        if resume_urls:
+            st.write(resume_urls)
+        else:
+            st.info("No URLs found in resume.")
+    with st.expander("🧑‍💼 Extracted Resume Skills", expanded=True):
+        if resume_skills:
+            st.success(resume_skills)
+        else:
+            st.warning("No skills found in resume.")
 
  
 # Process certificates
@@ -49,20 +83,49 @@ if uploaded_resume:
 cert_skills = []
 
 if uploaded_certs:
-    for cert_file in uploaded_certs:
-        cert_text = extract_and_clean_pdf_text(cert_file)
-        cert_name = extract_name_from_text(cert_text)
-        if uploaded_resume:
-            if not resume_name or not cert_name or resume_name.lower() != cert_name.lower():
-                st.warning(f"The name on the certificate ({cert_name}) does not match the name on the resume ({resume_name}). Skill verification skipped for this certificate.")
-                continue  # Skip skill extraction for this certificate
-        cert_skills.extend([skill for skill in COMMON_SKILLS if skill.lower() in cert_text.lower()])
+    st.markdown("---")
+    st.subheader("📄 Uploaded Certificates Analysis")
+    if len(uploaded_certs) > 1:
+        cert_cols = st.columns(len(uploaded_certs))
+        for idx, cert_file in enumerate(uploaded_certs):
+            with cert_cols[idx]:
+                cert_text = extract_and_clean_pdf_text(cert_file)
+                cert_name = extract_name_from_text(cert_text)
+                st.markdown(f"**Certificate {idx+1}:**")
+                st.caption(f"Name on certificate: **{cert_name}**")
+                if uploaded_resume:
+                    if not resume_name or not cert_name or resume_name.lower() != cert_name.lower():
+                        st.warning(f"Name mismatch: {cert_name} vs {resume_name}")
+                        continue
+                found_skills = [skill for skill in COMMON_SKILLS if skill.lower() in cert_text.lower()]
+                cert_skills.extend(found_skills)
+                if found_skills:
+                    st.success(f"Skills found: {found_skills}")
+                else:
+                    st.info("No skills found in this certificate.")
+    else:
+        for cert_file in uploaded_certs:
+            with st.container():
+                cert_text = extract_and_clean_pdf_text(cert_file)
+                cert_name = extract_name_from_text(cert_text)
+                st.markdown(f"**Certificate:**")
+                st.caption(f"Name on certificate: **{cert_name}**")
+                if uploaded_resume:
+                    if not resume_name or not cert_name or resume_name.lower() != cert_name.lower():
+                        st.warning(f"Name mismatch: {cert_name} vs {resume_name}")
+                        continue
+                found_skills = [skill for skill in COMMON_SKILLS if skill.lower() in cert_text.lower()]
+                cert_skills.extend(found_skills)
+                if found_skills:
+                    st.success(f"Skills found: {found_skills}")
+                else:
+                    st.info("No skills found in this certificate.")
 
 # Extract URLs from certificate links textarea, clean and deduplicate
 cert_link_urls = extract_links_from_text(cert_links)
 if cert_link_urls:
-    st.subheader("Extracted Certificate URLs")
-    st.write(cert_link_urls)
+    with st.expander("🌐 Extracted Certificate URLs", expanded=False):
+        st.write(cert_link_urls)
 
 all_urls = set(cert_link_urls)
 if uploaded_resume:
@@ -215,20 +278,27 @@ for url in all_urls:
 
 # Show result
 
+st.markdown("---")
+
 if resume_skills:
-
     matched, unmatched, extra = match_skills(resume_skills, cert_skills)
-
-    st.subheader("Skill Verification Report")
-
-    st.write("✅ Verified Skills:", matched)
-
-    st.write("❌ Claimed but Not Found:", unmatched)
-
-    st.write("📌 Extra Certified Skills:", extra)
-
+    st.subheader("📊 Skill Verification Report")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("✅ Verified Skills", len(matched))
+        st.write(matched if matched else "-")
+    with col2:
+        st.metric("❌ Not Found", len(unmatched))
+        st.write(unmatched if unmatched else "-")
+    with col3:
+        st.metric("📌 Extra Certified", len(extra))
+        st.write(extra if extra else "-")
 else:
+    st.subheader("🏅 Skills Found in Certifications")
+    if cert_skills:
+        st.success(cert_skills)
+    else:
+        st.info("No skills found in certifications.")
 
-    st.subheader("Skills Found in Certifications")
-
-    st.write(cert_skills)
+st.markdown("---")
+st.caption("© 2025 CertiNova | All rights reserved.")
