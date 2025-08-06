@@ -135,11 +135,8 @@ def extract_faces_from_pdf_first_page(pdf_file):
         img_base64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
         faces_b64.append(img_base64)
     if not faces_b64:
-        # No face found, return the full page image as fallback
-        buffered = BytesIO()
-        pil_img.save(buffered, format="PNG")
-        img_base64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
-        return [img_base64]
+        # No face found, return nothing
+        return []
     return faces_b64
 
 def extract_profile_image_from_pdf(pdf_file):
