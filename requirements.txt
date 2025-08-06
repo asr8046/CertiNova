@@ -3,4 +3,6 @@ requests
 beautifulsoup4
 pymupdf
 spacy
-# 're' is part of the Python standard library and does not need to be installed separately.
+opencv-python-headless 
+pillow
+# 're' is part of the Python standard library and does not need to be installed separatel

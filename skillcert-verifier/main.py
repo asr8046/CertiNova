@@ -60,17 +60,78 @@ COMMON_SKILLS = [
 ]
 
 if uploaded_resume:
-    from utils.pdf_parser import extract_name_from_text
+    from utils.pdf_parser import extract_name_from_text, extract_all_images_from_pdf
     with st.spinner("Extracting information from resume..."):
         resume_text = extract_and_clean_pdf_text(uploaded_resume)
         resume_name = extract_name_from_text(resume_text)
         resume_urls = extract_links_from_text(resume_text)
         resume_skills = [skill for skill in COMMON_SKILLS if skill.lower() in resume_text.lower()]
+        # Extract all embedded images
+        uploaded_resume.seek(0)
+        resume_images_b64 = extract_all_images_from_pdf(uploaded_resume)
+    # Display image selection and name
+    with st.container():
+        selected_image_b64 = None
+        image_displayed = False
+        if resume_images_b64:
+            if len(resume_images_b64) > 1:
+                thumb_cols = st.columns(len(resume_images_b64))
+                for idx, img_b64 in enumerate(resume_images_b64):
+                    with thumb_cols[idx]:
+                        st.image(f"data:image/png;base64,{img_b64}", width=80, caption=f"Image {idx+1}")
+                selected_idx = st.radio(
+                    "Select profile photo from extracted images:",
+                    options=list(range(len(resume_images_b64))),
+                    format_func=lambda i: f"Image {i+1}",
+                    horizontal=True
+                )
+                selected_image_b64 = resume_images_b64[selected_idx]
+                if selected_image_b64:
+                    st.markdown(f"<center><img src='data:image/png;base64,{selected_image_b64}' width='160'/></center>", unsafe_allow_html=True)
+                    image_displayed = True
+            else:
+                # Only one image, show it directly
+                if resume_images_b64[0]:
+                    st.markdown(f"<center><img src='data:image/png;base64,{resume_images_b64[0]}' width='160'/></center>", unsafe_allow_html=True)
+                    image_displayed = True
+        else:
+            # No embedded images found, try face detection from first page
+            from utils.pdf_parser import extract_faces_from_pdf_first_page
+            uploaded_resume.seek(0)
+            faces_b64 = extract_faces_from_pdf_first_page(uploaded_resume)
+            # Only show faces if at least one is detected
+            if faces_b64 and len(faces_b64) > 1:
+                thumb_cols = st.columns(len(faces_b64))
+                for idx, img_b64 in enumerate(faces_b64):
+                    with thumb_cols[idx]:
+                        st.image(f"data:image/png;base64,{img_b64}", width=80, caption=f"Face {idx+1}")
+                selected_idx = st.radio(
+                    "Select profile photo from detected faces:",
+                    options=list(range(len(faces_b64))),
+                    format_func=lambda i: f"Face {i+1}",
+                    horizontal=True
+                )
+                selected_image_b64 = faces_b64[selected_idx]
+                if selected_image_b64:
+                    st.markdown(f"<center><img src='data:image/png;base64,{selected_image_b64}' width='160'/></center>", unsafe_allow_html=True)
+                    image_displayed = True
+            elif faces_b64 and len(faces_b64) == 1:
+                if faces_b64[0]:
+                    st.markdown(f"<center><img src='data:image/png;base64,{faces_b64[0]}' width='160'/></center>", unsafe_allow_html=True)
+                    image_displayed = True
+        # Only show name if not None and an image or face was displayed
+        if resume_name and image_displayed:
+            st.markdown(f"<center><h3>{resume_name}</h3></center>", unsafe_allow_html=True)
+        elif resume_name and not image_displayed:
+            st.markdown(f"<center><h3>{resume_name}</h3></center>", unsafe_allow_html=True)
+
     with st.expander("🔗 URLs Extracted from Resume", expanded=False):
         if resume_urls:
             st.write(resume_urls)
         else:
             st.info("No URLs found in resume.")
+
+
     with st.expander("🧑‍💼 Extracted Resume Skills", expanded=True):
         if resume_skills:
             st.success(resume_skills)
